@@ -41,12 +41,6 @@ add_filter( 'civi_wp_member_sync_contact_retrieved', function ( $contact_data ) 
 			if ( isset( $contact_data_head['values'][ $contact_data_head['id'] ]['email'] ) ) {
 				$contact_data['email'] = $contact_data_head['values'][ $contact_data_head['id'] ]['email'];
 			};
-			if ( isset( $contact_data_head['values'][ $contact_data_head['id'] ]['sort_name'] ) ) {
-				$contact_data['sort_name'] = $contact_data_head['values'][ $contact_data_head['id'] ]['sort_name'];
-			};
-			if ( isset( $contact_data_head['values'][ $contact_data_head['id'] ]['display_name'] ) ) {
-				$contact_data['display_name'] = $contact_data_head['values'][ $contact_data_head['id'] ]['display_name'];
-			};
 		}
 	};
 
