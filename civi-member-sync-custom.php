@@ -23,7 +23,7 @@
  * Plugin Name: Civi Member Sync Custom
  * Plugin URI: https://fullworks.net
  * Description: Filters Contacts for Member Sync and also sync emails one way from CiviCrm to WP
- * Version: 2.0
+ * Version: 2.1
  *
  * Author: alan
  * Author URI: https://fullworks.net
@@ -131,7 +131,8 @@ add_action( /**
 		}
 		$user->data->user_email = $objectRef->email;
 		$result                 = wp_update_user( $user );
-		if ( is_error( $result ) ) {
+		if ( is_wp_error( $result ) ) {
+			error_log( 'Error syncing user: '. $result->get_error_message() . print_r($user, true));
 			return;
 		}
 	},
