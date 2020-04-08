@@ -89,7 +89,7 @@ add_filter( /**
 
 		if ( false === $email_found ) {
 			// generate an email and make sure it does not exist.
-			// change the @fullworks.net to your own domain, teh email is never used but if you use a domain that you do not control someone in theory could add a catchall email.
+			// change the @fullworks.net to your own domain, the email is never used but if you use a domain that you do not control someone in theory could add a catchall email.
 			do {
 				$contact_data['email'] = md5( time() ) . '@fullworks.net';
 			} while ( false !== email_exists( $contact_data['email'] ) );
