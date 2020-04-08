@@ -23,24 +23,27 @@
  * Plugin Name: Civi Member Sync Custom
  * Plugin URI: https://fullworks.net
  * Description: Filters Contacts for Member Sync and also sync emails one way from CiviCrm to WP
- * Version: 2.1
+ * Version: 2.2
  *
  * Author: alan
  * Author URI: https://fullworks.net
  * License: GPL2
  *
- * With thanks to Christian Wach for his tips and code examples
  *
  * This plugin extends CiviCRM WordPress Member Sync by Christian Wach
  * to cater for a membership structure where the member is household,
- * but the login is via the Head of Household ( custom relationship )
+ * but the login is via the Head of Household ( custom relationship id = 7 )
  *
  * It does this by filtering the contact data by matching up the relationship and grabbing the email
  *
- * It also does a one way syncronisation from CiviCRM to WordPress for email changes in CiviCRM
+ * If no email exists it generates a random email so later email changes can be applied
+ *
+ * It also does a one way syncronisation from CiviCRM to WordPress for email changes of releationship changes in CiviCRM
  * using the custom relationship
  *
- * There is no error checking so if CiviCRM is not loaded things will simple fail
+ * There is no error checking so if CiviCRM is not loaded things will simple fail, but us driven off CivCRM filters so a low risk here
+ *
+ * With thanks to Christian Wach for his tips and code examples
  *
  */
 
@@ -67,6 +70,7 @@ add_filter( /**
 			'relationship_type_id' => 7,
 			'is_active'            => 1,
 		) );
+		$email_found  = false;
 // Now switch the contact data if it exists.
 		if ( isset ( $relationship['values'][0] ) ) {
 			$params = array(
@@ -78,9 +82,18 @@ add_filter( /**
 			if ( isset( $contact_data_head['id'] ) ) {
 				if ( isset( $contact_data_head['values'][ $contact_data_head['id'] ]['email'] ) ) {
 					$contact_data['email'] = $contact_data_head['values'][ $contact_data_head['id'] ]['email'];
+					$email_found           = true;
 				};
 			}
 		};
+
+		if ( false === $email_found ) {
+			// generate an email and make sure it does not exist.
+			// change the @fullworks.net to your own domain, teh email is never used but if you use a domain that you do not control someone in theory could add a catchall email.
+			do {
+				$contact_data['email'] = md5( time() ) . '@fullworks.net';
+			} while ( false !== email_exists( $contact_data['email'] ) );
+		}
 
 		return $contact_data;
 	},
@@ -98,8 +111,8 @@ add_action( /**
  */
 	'civicrm_post',
 	function ( $op, $objectName, $objectId, $objectRef ) {
-		// only edits
-		if ( $op != 'edit' ) {
+		// only edits and creates
+		if ( $op != 'edit' && $op != 'create' ) {
 			return;
 		}
 		// Only email
@@ -119,7 +132,11 @@ add_action( /**
 			'relationship_type_id' => 7,
 			'is_active'            => 1,
 		) );
-		$user_id      = CRM_Core_BAO_UFMatch::getUFId(
+		// no relationship, bail.
+		if ( ! isset ( $relationship['values'][0]['contact_id_b'] ) ) {
+			return;
+		}
+		$user_id = CRM_Core_BAO_UFMatch::getUFId(
 			$relationship['values'][0]['contact_id_b']
 		);
 		if ( null === $user_id ) {
@@ -132,7 +149,69 @@ add_action( /**
 		$user->data->user_email = $objectRef->email;
 		$result                 = wp_update_user( $user );
 		if ( is_wp_error( $result ) ) {
-			error_log( 'Error syncing user: '. $result->get_error_message() . print_r($user, true));
+			error_log( 'Error syncing user: ' . $result->get_error_message() . print_r( $user, true ) );
+
+			return;
+		}
+	},
+	10,
+	4
+);
+
+add_action( /**
+ * Process relationship changes to get correct email
+ *
+ * @param $op
+ * @param $objectName
+ * @param $objectId
+ * @param $objectRef
+ */
+	'civicrm_post',
+	function ( $op, $objectName, $objectId, $objectRef ) {
+		// only edit & creates
+		if ( $op != 'edit' && $op != 'create' ) {
+			return;
+		}
+		// Only relationships
+		if ( $objectName != 'Relationship' ) {
+			return;
+		}
+
+		if ( 7 != $objectRef->relationship_type_id || 1 != $objectRef->is_active ) {
+			return;
+		}
+		if ( ! isset ( $objectRef->contact_id_a ) || ! isset ( $objectRef->contact_id_b ) ) {
+			return;
+		}
+		// get the email from the Individual ( Head of House ) contact_id_a
+		$individual = civicrm_api( 'Contact', 'get', array(
+			'version'    => 3,
+			'sequential' => 1,
+			'return'     => [ "email" ],
+			'contact_id' => $objectRef->contact_id_a,
+		) );
+		if ( ! isset ( $individual['values'][0]['email'] ) ) {
+			return;
+		}
+		if ( empty ( $individual['values'][0]['email'] ) ) {
+			return;
+		}
+
+		$user_id = CRM_Core_BAO_UFMatch::getUFId(
+			$objectRef->contact_id_b
+		);
+		if ( null === $user_id ) {
+			return;
+		}
+		$user = get_userdata( $user_id );
+		if ( false == $user ) {
+			return;
+		}
+		$user->data->user_email = $individual['values'][0]['email'];
+		$result                 = wp_update_user( $user );
+		if ( is_wp_error( $result ) ) {
+			error_log( 'Error syncing user: ' . $result->get_error_message() . print_r( $user, true ) );
+
 			return;
 		}
 	},
